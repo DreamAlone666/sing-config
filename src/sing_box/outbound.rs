@@ -18,11 +18,20 @@ impl Outbound {
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum OutboundKind {
     Selector(Selector),
+    UrlTest(UrlTest),
+    #[serde(untagged)]
     Unknown(Map<String, Value>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Selector {
+    pub outbounds: Vec<String>,
+    #[serde(flatten)]
+    pub extra: Map<String, Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UrlTest {
     pub outbounds: Vec<String>,
     #[serde(flatten)]
     pub extra: Map<String, Value>,

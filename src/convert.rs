@@ -33,6 +33,85 @@ enum ConvertOutboundsErrorSource<E> {
     ProviderTagConflict { tag: String, from: String },
 }
 
+/// 辅助类。
+struct Converter<'a, L> {
+    output: HashMap<String, SingBoxOutbound>,
+    merged_providers: HashSet<String>,
+    loader: &'a L,
+}
+
+impl<'a, L: LoadProvider> Converter<'a, L> {
+    fn new(loader: &'a L) -> Self {
+        Self {
+            output: HashMap::new(),
+            merged_providers: HashSet::new(),
+            loader,
+        }
+    }
+
+    /// 尝试合并 provider，并返回出站列表。
+    fn merge_provider(
+        &mut self,
+        tag: impl Into<String>,
+    ) -> Result<&[SingBoxOutbound], ConvertOutboundsErrorSource<L::Error>> {
+        let tag = tag.into();
+        let config = self.loader.load_provider(&tag).map_err(|e| {
+            ConvertOutboundsErrorSource::LoadProvider {
+                tag: tag.clone(),
+                source: e,
+            }
+        })?;
+
+        if !self.merged_providers.contains(&tag) {
+            // provider 未合并，先逐一检查标签冲突
+            self.output.reserve(config.outbounds.len());
+            for outbound in &config.outbounds {
+                if self.output.contains_key(&outbound.tag) {
+                    return Err(ConvertOutboundsErrorSource::ProviderTagConflict {
+                        tag: outbound.tag.clone(),
+                        from: tag,
+                    });
+                }
+                self.output.insert(outbound.tag.clone(), outbound.clone());
+            }
+            self.merged_providers.insert(tag);
+        }
+
+        Ok(&config.outbounds)
+    }
+
+    /// 将 `outbound_providers` 展开到 `outbounds` 中。
+    fn expand_providers(
+        &mut self,
+        outbounds: &mut Vec<String>,
+        outbound_providers: Vec<String>,
+    ) -> Result<(), ConvertOutboundsErrorSource<L::Error>> {
+        for tag in outbound_providers {
+            let provider_outbounds = self.merge_provider(tag)?;
+            outbounds.extend(provider_outbounds.iter().map(|x| x.tag.clone()));
+        }
+        Ok(())
+    }
+
+    /// 尝试合并出站。
+    fn merge_outbound(
+        &mut self,
+        tag: impl Into<String>,
+        kind: SingBoxOutboundKind,
+    ) -> Result<(), ConvertOutboundsError<L::Error>> {
+        let tag = tag.into();
+        if self.output.contains_key(&tag) {
+            return Err(ConvertOutboundsError::new(
+                tag,
+                ConvertOutboundsErrorSource::InnerTagConflict,
+            ));
+        }
+        self.output
+            .insert(tag.clone(), SingBoxOutbound::new(tag, kind));
+        Ok(())
+    }
+}
+
 /// 将 sing-config 的出站列表转换成 sing-box 的出站列表，使用外部提供的加载器来加载 provider。
 ///
 /// 返回一个出站标签到出站的映射，确保了出站标签不存在冲突。
@@ -40,69 +119,32 @@ pub fn convert_outbounds<L: LoadProvider>(
     input: Vec<SingConfigOutbound>,
     loader: &L,
 ) -> Result<HashMap<String, SingBoxOutbound>, ConvertOutboundsError<L::Error>> {
-    let mut output = HashMap::with_capacity(input.len());
-    let mut merged_providers = HashSet::new();
+    let mut converter = Converter::new(loader);
+
     for SingConfigOutbound { tag, kind } in input {
         let handled_kind = match kind {
             SingConfigOutboundKind::Selector(selector) => {
-                let (mut selector, provider_tags) = selector.split();
-                for provider_tag in provider_tags {
-                    let config = loader.load_provider(&provider_tag).map_err(|e| {
-                        ConvertOutboundsError::new(
-                            tag.clone(),
-                            ConvertOutboundsErrorSource::LoadProvider {
-                                tag: provider_tag.clone(),
-                                source: e,
-                            },
-                        )
-                    })?;
-
-                    if merged_providers.contains(&provider_tag) {
-                        // provider 已合并，直接插入标签
-                        selector
-                            .outbounds
-                            .extend(config.outbounds.iter().map(|x| x.tag.clone()));
-                    } else {
-                        // provider 未合并，先逐一检查标签冲突
-                        output.reserve(config.outbounds.len());
-                        for outbound in &config.outbounds {
-                            if output.contains_key(&outbound.tag) {
-                                return Err(ConvertOutboundsError::new(
-                                    tag,
-                                    ConvertOutboundsErrorSource::ProviderTagConflict {
-                                        tag: outbound.tag.clone(),
-                                        from: provider_tag,
-                                    },
-                                ));
-                            }
-                            output.insert(outbound.tag.clone(), outbound.clone());
-                            selector.outbounds.push(outbound.tag.clone());
-                        }
-                        merged_providers.insert(provider_tag);
-                    }
-                }
+                let (mut selector, outbound_providers) = selector.split();
+                converter
+                    .expand_providers(&mut selector.outbounds, outbound_providers)
+                    .map_err(|e| ConvertOutboundsError::new(tag.clone(), e))?;
                 SingBoxOutboundKind::Selector(selector)
+            }
+            SingConfigOutboundKind::UrlTest(url_test) => {
+                let (mut url_test, outbound_providers) = url_test.split();
+                converter
+                    .expand_providers(&mut url_test.outbounds, outbound_providers)
+                    .map_err(|e| ConvertOutboundsError::new(tag.clone(), e))?;
+                SingBoxOutboundKind::UrlTest(url_test)
             }
             SingConfigOutboundKind::Unknown(map) => SingBoxOutboundKind::Unknown(map),
         };
 
         // 转换完后，也尝试将自己合并进去
-        if output.contains_key(&tag) {
-            return Err(ConvertOutboundsError::new(
-                tag,
-                ConvertOutboundsErrorSource::InnerTagConflict,
-            ));
-        }
-        output.insert(
-            tag.clone(),
-            SingBoxOutbound {
-                tag,
-                kind: handled_kind,
-            },
-        );
+        converter.merge_outbound(tag, handled_kind)?;
     }
 
-    Ok(output)
+    Ok(converter.output)
 }
 
 #[cfg(test)]
@@ -112,7 +154,10 @@ mod tests {
     use serde_json::{Map, Value};
 
     use super::*;
-    use crate::{sing_box, sing_config::outbound::Selector as SingConfigSelector};
+    use crate::{
+        sing_box,
+        sing_config::outbound::{Selector as SingConfigSelector, UrlTest as SingConfigUrlTest},
+    };
 
     struct MockLoader {
         map: HashMap<String, sing_box::Config>,
@@ -147,6 +192,20 @@ mod tests {
     #[derive(Debug, Error)]
     #[error("provider 不存在")]
     struct LoadProviderError;
+
+    fn sing_box_unknown_outbound(
+        tag: impl Into<String>,
+        key: impl Into<String>,
+        value: impl Into<String>,
+    ) -> SingBoxOutbound {
+        SingBoxOutbound::new(
+            tag.into(),
+            sing_box::outbound::OutboundKind::Unknown(Map::from_iter([(
+                key.into(),
+                Value::String(value.into()),
+            )])),
+        )
+    }
 
     #[test]
     fn expand_selector() -> Result<(), Box<dyn Error>> {
@@ -272,17 +331,50 @@ mod tests {
         }
     }
 
-    fn sing_box_unknown_outbound(
-        tag: impl Into<String>,
-        key: impl Into<String>,
-        value: impl Into<String>,
-    ) -> SingBoxOutbound {
-        SingBoxOutbound::new(
-            tag.into(),
-            sing_box::outbound::OutboundKind::Unknown(Map::from_iter([(
-                key.into(),
-                Value::String(value.into()),
-            )])),
-        )
+    #[test]
+    fn expand_url_test() -> Result<(), Box<dyn Error>> {
+        let mut loader = MockLoader::new();
+        let provider_outbound_1 = sing_box_unknown_outbound("p1_out1", "foo", "bar");
+        let provider_outbound_2 = sing_box_unknown_outbound("p1_out2", "bar", "foo");
+        loader.add_provider(
+            "provider1",
+            vec![provider_outbound_1.clone(), provider_outbound_2.clone()],
+        );
+
+        let url_test = SingConfigUrlTest {
+            outbounds: vec!["existing_outbound".to_string()],
+            outbound_providers: vec!["provider1".to_string()],
+            extra: Map::new(),
+        };
+        let input = vec![SingConfigOutbound {
+            tag: "url_test1".to_string(),
+            kind: SingConfigOutboundKind::UrlTest(url_test),
+        }];
+        let output = convert_outbounds(input, &loader)?;
+
+        // Verify "url_test1" is present and expanded
+        match &output["url_test1"].kind {
+            SingBoxOutboundKind::UrlTest(u) => assert_eq!(
+                u.outbounds.as_slice(),
+                &[
+                    "existing_outbound",
+                    &provider_outbound_1.tag,
+                    &provider_outbound_2.tag
+                ]
+            ),
+            _ => panic!("url_test1 should be a UrlTest"),
+        }
+
+        // Verify provider outbounds are present and match exactly
+        assert_eq!(
+            output.get(&provider_outbound_1.tag),
+            Some(&provider_outbound_1)
+        );
+        assert_eq!(
+            output.get(&provider_outbound_2.tag),
+            Some(&provider_outbound_2)
+        );
+
+        Ok(())
     }
 }
