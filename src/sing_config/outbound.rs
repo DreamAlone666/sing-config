@@ -1,11 +1,19 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
+use crate::sing_box;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Outbound {
-    tag: String,
+    pub tag: String,
     #[serde(flatten)]
-    kind: OutboundKind,
+    pub kind: OutboundKind,
+}
+
+impl Outbound {
+    pub fn new(tag: String, kind: OutboundKind) -> Self {
+        Self { tag, kind }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -18,8 +26,21 @@ pub enum OutboundKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Selector {
-    outbounds: Vec<String>,
-    outbound_providers: Vec<String>,
+    pub outbounds: Vec<String>,
+    pub outbound_providers: Vec<String>,
     #[serde(flatten)]
-    extra: Map<String, Value>,
+    pub extra: Map<String, Value>,
+}
+
+impl Selector {
+    /// 拆分成两部分，第一部分是 sing-box 的选择器出站，另一部分是 providers 列表。
+    pub(crate) fn split(self) -> (sing_box::outbound::Selector, Vec<String>) {
+        (
+            sing_box::outbound::Selector {
+                outbounds: self.outbounds,
+                extra: self.extra,
+            },
+            self.outbound_providers,
+        )
+    }
 }

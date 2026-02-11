@@ -3,9 +3,15 @@ use serde_json::{Map, Value};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Outbound {
-    tag: String,
+    pub tag: String,
     #[serde(flatten)]
-    kind: OutboundKind,
+    pub kind: OutboundKind,
+}
+
+impl Outbound {
+    pub fn new(tag: String, kind: OutboundKind) -> Self {
+        Self { tag, kind }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -17,7 +23,7 @@ pub enum OutboundKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Selector {
-    outbounds: Vec<String>,
+    pub outbounds: Vec<String>,
     #[serde(flatten)]
-    extra: Map<String, Value>,
+    pub extra: Map<String, Value>,
 }

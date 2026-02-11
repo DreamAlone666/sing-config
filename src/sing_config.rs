@@ -7,7 +7,7 @@ use outbound::Outbound;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Config {
-    outbounds: Vec<Outbound>,
+    pub outbounds: Vec<Outbound>,
     #[serde(flatten)]
-    extra: Map<String, Value>,
+    pub extra: Map<String, Value>,
 }
