@@ -1,3 +1,5 @@
+pub mod lazy;
+
 use crate::sing_box;
 
 pub trait LoadProvider {
