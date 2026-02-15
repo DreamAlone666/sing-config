@@ -25,6 +25,7 @@ pub enum OutboundKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Selector {
+    #[serde(default)]
     pub outbounds: Vec<String>,
     #[serde(flatten)]
     pub extra: Map<String, Value>,
@@ -32,6 +33,7 @@ pub struct Selector {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UrlTest {
+    #[serde(default)]
     pub outbounds: Vec<String>,
     #[serde(flatten)]
     pub extra: Map<String, Value>,
