@@ -1,3 +1,4 @@
+use derive_more::From;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -14,12 +15,13 @@ impl Outbound {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, From)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum OutboundKind {
     Selector(Selector),
     UrlTest(UrlTest),
     #[serde(untagged)]
+    #[from(skip)]
     Unknown(Map<String, Value>),
 }
 
