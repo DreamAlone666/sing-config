@@ -7,4 +7,8 @@ use serde::{Deserialize, Serialize};
 pub enum Provider {
     Path(PathBuf),
     Url(String),
+    /// 引用某个 provider，使用其输出作为当前 provider 的输入。
+    ///
+    /// 权衡实现和实际使用的复杂度，只允许引用非 `Ref` 类型的 provider。
+    Ref(String),
 }
