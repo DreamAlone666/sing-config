@@ -97,16 +97,20 @@ fn convert_input<E>(
     Ok((outbound_map, provider_consumers))
 }
 
-/// 尝试合并来自 providers 的节点。
+/// 尝试合并来自 providers 的出站。
 ///
 /// # Errors
 ///
-/// 如果节点的标签被占用，则将其标签作为错误抛出。
+/// 如果出站的标签被另一个出站占用（标签相等但其他值不相等），则将其标签作为错误抛出。
 fn merge_provider<'a>(map: &mut OutboundMap, config: &'a sing_box::Config) -> Result<(), &'a str> {
     map.reserve(config.outbounds.len());
     for outbound in &config.outbounds {
         match map.entry(outbound.tag.clone()) {
-            Entry::Occupied(_) => return Err(&outbound.tag),
+            Entry::Occupied(entry) => {
+                if entry.get() != outbound {
+                    return Err(&outbound.tag);
+                }
+            }
             Entry::Vacant(entry) => {
                 entry.insert(outbound.clone());
             }
