@@ -4,10 +4,16 @@ use once_cell::unsync::OnceCell;
 use thiserror::Error;
 
 use super::LoadProvider;
-use crate::{sing_box, sing_config::provider::Provider};
+use crate::{
+    sing_box::Config,
+    sing_config::provider::{
+        Provider, ProviderKind,
+        action::{Action, ApplyActionError},
+    },
+};
 
 pub struct LazyLoader {
-    map: HashMap<String, (Provider, OnceCell<sing_box::Config>)>,
+    map: HashMap<String, (Provider, OnceCell<Config>)>,
 }
 
 impl LazyLoader {
@@ -20,24 +26,39 @@ impl LazyLoader {
         }
     }
 
-    fn load(&self, tag: &str, is_from_ref: bool) -> Result<&sing_box::Config, LoadProviderError> {
-        let (provider, cell) = self.map.get(tag).ok_or(LoadProviderError::NotFound)?;
-        cell.get_or_try_init(|| match provider {
-            Provider::Path(path) => {
-                let file = File::open(path)?;
-                let config = serde_json::from_reader(file)?;
-                Ok(config)
-            }
-            Provider::Url(_url) => todo!(),
-            Provider::Ref(ref_tag) => {
-                if is_from_ref {
-                    return Err(LoadProviderError::NestedRef(tag.to_string()));
+    fn load(&self, tag: &str, is_from_ref: bool) -> Result<&Config, LoadProviderError> {
+        let (Provider { kind, actions }, cell) =
+            self.map.get(tag).ok_or(LoadProviderError::NotFound)?;
+        cell.get_or_try_init(|| {
+            let mut config = match kind {
+                ProviderKind::Path(path) => {
+                    let file = File::open(path)?;
+                    let config = serde_json::from_reader(file)?;
+                    Ok(config)
                 }
-                if tag == ref_tag {
-                    return Err(LoadProviderError::SelfRef);
+                ProviderKind::Url(_url) => todo!(),
+                ProviderKind::Ref(ref_tag) => {
+                    if is_from_ref {
+                        return Err(LoadProviderError::NestedRef(tag.to_string()));
+                    }
+                    if tag == ref_tag {
+                        return Err(LoadProviderError::SelfRef);
+                    }
+                    self.load(ref_tag, true).cloned()
                 }
-                self.load(ref_tag, true).cloned()
+            }?;
+
+            // 按顺序应用操作链
+            for action in actions {
+                config.outbounds = action.apply(config.outbounds).map_err(|source| {
+                    LoadProviderError::ApplyAction {
+                        source,
+                        action: action.clone(),
+                    }
+                })?;
             }
+
+            Ok(config)
         })
     }
 }
@@ -45,7 +66,7 @@ impl LazyLoader {
 impl LoadProvider for LazyLoader {
     type Error = LoadProviderError;
 
-    fn load_provider(&self, tag: &str) -> Result<&sing_box::Config, Self::Error> {
+    fn load_provider(&self, tag: &str) -> Result<&Config, Self::Error> {
         self.load(tag, false)
     }
 }
@@ -62,15 +83,27 @@ pub enum LoadProviderError {
     SelfRef,
     #[error("引用了 provider `{0}`，但 `{0}` 不能再进行引用")]
     NestedRef(String),
+    #[error("未能应用操作 {action:?}")]
+    ApplyAction {
+        source: ApplyActionError,
+        action: Action,
+    },
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn ref_provider(tag: &str) -> Provider {
+        Provider {
+            kind: ProviderKind::Ref(tag.to_string()),
+            actions: vec![],
+        }
+    }
+
     #[test]
     fn self_ref_should_error() {
-        let providers = HashMap::from([("a".to_string(), Provider::Ref("a".to_string()))]);
+        let providers = HashMap::from([("a".to_string(), ref_provider("a"))]);
         let loader = LazyLoader::new(providers);
 
         let err = loader.load_provider("a").unwrap_err();
@@ -80,8 +113,8 @@ mod tests {
     #[test]
     fn nested_ref_should_error() {
         let providers = HashMap::from([
-            ("a".to_string(), Provider::Ref("b".to_string())),
-            ("b".to_string(), Provider::Ref("c".to_string())),
+            ("a".to_string(), ref_provider("b")),
+            ("b".to_string(), ref_provider("c")),
         ]);
         let loader = LazyLoader::new(providers);
 
