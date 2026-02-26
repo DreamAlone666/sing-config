@@ -38,6 +38,7 @@ fn build(args: &Cli) -> anyhow::Result<()> {
             toml::from_slice(&buf).context("未能解析文件")?
         }
         b"json" => serde_json::from_reader(file).context("未能解析文件")?,
+        b"yaml" | b"yml" => serde_saphyr::from_reader(file).context("未能解析文件")?,
         _ => bail!("不支持扩展名 `{extension}`"),
     };
 
