@@ -33,10 +33,13 @@ impl LazyLoader {
             let mut config = match kind {
                 ProviderKind::Path(path) => {
                     let file = File::open(path)?;
-                    let config = serde_json::from_reader(file)?;
-                    Ok(config)
+                    serde_json::from_reader(file)?
                 }
-                ProviderKind::Url(_url) => todo!(),
+                ProviderKind::Url(url) => {
+                    let mut response = ureq::get(url).call()?;
+                    let reader = response.body_mut().as_reader();
+                    serde_json::from_reader(reader)?
+                }
                 ProviderKind::Ref(ref_tag) => {
                     if is_from_ref {
                         return Err(LoadProviderError::NestedRef(tag.to_string()));
@@ -44,9 +47,9 @@ impl LazyLoader {
                     if tag == ref_tag {
                         return Err(LoadProviderError::SelfRef);
                     }
-                    self.load(ref_tag, true).cloned()
+                    self.load(ref_tag, true).cloned()?
                 }
-            }?;
+            };
 
             // 按顺序应用操作链
             for action in actions {
@@ -77,7 +80,7 @@ pub enum LoadProviderError {
     NotFound,
     #[error("未能读取文件")]
     ReadFile(#[from] io::Error),
-    #[error("未能解析 provider")]
+    #[error("未能解析内容")]
     Parse(#[from] serde_json::Error),
     #[error("不能引用自己")]
     SelfRef,
@@ -88,6 +91,8 @@ pub enum LoadProviderError {
         source: ApplyActionError,
         action: Action,
     },
+    #[error("未能完成请求")]
+    Request(#[from] ureq::Error),
 }
 
 #[cfg(test)]
