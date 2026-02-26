@@ -4,26 +4,13 @@ use std::{
     path::PathBuf,
 };
 
-use ::sing_config::{convert::convert_outbounds, load::lazy::LazyLoader, sing_box};
+use ::sing_config::{convert::convert_outbounds, load::lazy::LazyLoader, sing_box, sing_config};
 use anyhow::{Context, bail};
-use clap::{Args, Parser, Subcommand};
-use sing_config::sing_config;
+use clap::Parser;
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
 struct Cli {
-    #[command(subcommand)]
-    command: Commands,
-}
-
-#[derive(Debug, Subcommand)]
-enum Commands {
-    /// 将 sing-config 构建为 sing-box config
-    Build(BuildArgs),
-}
-
-#[derive(Debug, Args)]
-struct BuildArgs {
     /// 输入文件的路径
     path: PathBuf,
     /// 输出文件的路径
@@ -33,15 +20,11 @@ struct BuildArgs {
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    match cli.command {
-        Commands::Build(args) => {
-            build(&args).with_context(|| format!("未能构建文件 `{}`", args.path.display()))?
-        }
-    }
+    build(&cli).with_context(|| format!("未能构建文件 `{}`", cli.path.display()))?;
     Ok(())
 }
 
-fn build(args: &BuildArgs) -> anyhow::Result<()> {
+fn build(args: &Cli) -> anyhow::Result<()> {
     let mut file = File::open(&args.path).context("未能打开文件")?;
     let extension = args
         .path
