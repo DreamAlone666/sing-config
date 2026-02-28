@@ -3,13 +3,8 @@ use thiserror::Error;
 
 use crate::{
     load::LoadProvider,
-    sing_box::{
-        self,
-        outbound::{Outbound as SingBoxOutbound, OutboundKind as SingBoxOutboundKind},
-    },
-    sing_config::outbound::{
-        Outbound as SingConfigOutbound, OutboundKind as SingConfigOutboundKind,
-    },
+    sing_box::{self, Outbound as SingBoxOutbound, OutboundKind as SingBoxOutboundKind},
+    sing_config::{Outbound as SingConfigOutbound, OutboundKind as SingConfigOutboundKind},
 };
 
 #[derive(Debug, Error)]
@@ -142,7 +137,7 @@ mod tests {
     use super::*;
     use crate::{
         sing_box,
-        sing_config::outbound::{Selector as SingConfigSelector, UrlTest as SingConfigUrlTest},
+        sing_config::{Selector as SingConfigSelector, UrlTest as SingConfigUrlTest},
     };
 
     struct MockLoader {
@@ -186,7 +181,7 @@ mod tests {
     ) -> SingBoxOutbound {
         SingBoxOutbound::new(
             tag.into(),
-            sing_box::outbound::OutboundKind::Unknown(Map::from_iter([(
+            sing_box::OutboundKind::Unknown(Map::from_iter([(
                 key.into(),
                 Value::String(value.into()),
             )])),

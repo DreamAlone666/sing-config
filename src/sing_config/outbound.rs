@@ -39,9 +39,9 @@ pub struct Selector {
 
 impl Selector {
     /// 拆分成两部分，第一部分是 sing-box 的选择器出站，另一部分是 providers 列表。
-    pub(crate) fn split(self) -> (sing_box::outbound::Selector, Vec<String>) {
+    pub(crate) fn split(self) -> (sing_box::Selector, Vec<String>) {
         (
-            sing_box::outbound::Selector {
+            sing_box::Selector {
                 outbounds: self.outbounds,
                 extra: self.extra,
             },
@@ -62,9 +62,9 @@ pub struct UrlTest {
 
 impl UrlTest {
     /// 拆分成两部分，第一部分是 sing-box 的选择器出站，另一部分是 providers 列表。
-    pub(crate) fn split(self) -> (sing_box::outbound::UrlTest, Vec<String>) {
+    pub(crate) fn split(self) -> (sing_box::UrlTest, Vec<String>) {
         (
-            sing_box::outbound::UrlTest {
+            sing_box::UrlTest {
                 outbounds: self.outbounds,
                 extra: self.extra,
             },

@@ -1,10 +1,8 @@
-pub mod action;
-
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use action::Action;
+use super::action::Action;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

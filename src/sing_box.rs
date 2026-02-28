@@ -1,9 +1,9 @@
 pub mod outbound;
 
+pub use outbound::{Outbound, OutboundKind, Selector, UrlTest};
+
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-
-use outbound::Outbound;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Config {

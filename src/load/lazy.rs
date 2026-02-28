@@ -6,10 +6,7 @@ use thiserror::Error;
 use super::LoadProvider;
 use crate::{
     sing_box::Config,
-    sing_config::provider::{
-        Provider, ProviderKind,
-        action::{Action, ApplyActionError},
-    },
+    sing_config::{Action, Provider, ProviderKind, action::ApplyActionError},
 };
 
 pub struct LazyLoader {

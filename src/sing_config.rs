@@ -1,13 +1,15 @@
+pub mod action;
 pub mod outbound;
 pub mod provider;
+
+pub use action::Action;
+pub use outbound::{Outbound, OutboundKind, Selector, UrlTest};
+pub use provider::{Provider, ProviderKind};
 
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-
-use outbound::Outbound;
-use provider::Provider;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Config {
