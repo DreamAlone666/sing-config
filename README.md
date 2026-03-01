@@ -1,6 +1,7 @@
 # sing-config
 
 [![LICENSE](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Release Workflow](https://img.shields.io/github/actions/workflow/status/DreamAlone666/sing-config/release.yml?label=release)](https://github.com/DreamAlone666/sing-config/actions/workflows/release.yml)
 
 [sing-box](https://github.com/SagerNet/sing-box) 配置文件预处理器，支持更多的配置语言和 Providers。
 
